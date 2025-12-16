@@ -34,6 +34,9 @@ function AppContent() {
   const [schemaError, setSchemaError] = useState(null);
   const [entityEditDialog, setEntityEditDialog] = useState({ isOpen: false, entity: null });
 
+  // Callback para guardar en historial (lo recibimos de SVGViewer)
+  const svgHistoryCallback = React.useRef(null);
+
   const {
     svgData,
     selectedElement,
@@ -215,9 +218,82 @@ function AppContent() {
    */
   const handleUpdateEntity = (updatedEntity) => {
     console.log('✏️ Actualizando entidad:', updatedEntity);
-    // TODO: Implementar actualización de entidad en el SVG (Fase 2.4)
-    // Por ahora solo cerramos el dialog
-    setEntityEditDialog({ isOpen: false, entity: null });
+
+    if (!updatedEntity || !updatedEntity.id) {
+      console.error('❌ No se puede actualizar: entity sin ID');
+      return;
+    }
+
+    try {
+      // Buscar el elemento DOM en el SVG principal
+      const svgElement = document.querySelector('#pictoforge-main-svg');
+      if (!svgElement) {
+        console.error('❌ SVG principal no encontrado');
+        return;
+      }
+
+      // Buscar el elemento por su ID original (antes del cambio)
+      const oldId = entityEditDialog.entity?.id;
+      const domElement = svgElement.querySelector(`#${CSS.escape(oldId)}`);
+
+      if (!domElement) {
+        console.error('❌ Elemento no encontrado en DOM:', oldId);
+        return;
+      }
+
+      // Detectar qué cambió: ID, clase CSS, o ambos
+      const idChanged = updatedEntity.id !== oldId;
+      const classChanged = updatedEntity.className !== undefined;
+
+      // Aplicar cambios
+      if (idChanged) {
+        const newId = updatedEntity.id;
+        domElement.setAttribute('id', newId);
+        console.log('✅ ID actualizado:', { oldId, newId });
+      }
+
+      if (classChanged) {
+        if (updatedEntity.className === null || updatedEntity.className === 'inherit') {
+          domElement.removeAttribute('class');
+          console.log('✅ Clase CSS removida');
+        } else {
+          domElement.setAttribute('class', updatedEntity.className);
+          console.log('✅ Clase CSS actualizada:', updatedEntity.className);
+        }
+      }
+
+      // Obtener el SVG actualizado
+      const svgContainer = document.querySelector('#pictogram-content');
+      if (svgContainer) {
+        // Reconstruir el SVG completo con el cambio
+        const fullSVG = svgElement.outerHTML;
+
+        // Guardar en historial si el callback está disponible
+        if (svgHistoryCallback.current) {
+          svgHistoryCallback.current(fullSVG);
+          console.log('💾 Cambio guardado en historial');
+        }
+
+        // Re-parsear el SVG para actualizar el estado
+        loadSVG(fullSVG);
+
+        // Buscar y seleccionar el elemento con el nuevo ID (si cambió)
+        if (idChanged) {
+          setTimeout(() => {
+            const element = findElementById(updatedEntity.id);
+            if (element) {
+              setSelectedElement(element);
+              console.log('✅ Elemento re-seleccionado con nuevo ID:', updatedEntity.id);
+            }
+          }, 100);
+        }
+      }
+
+      // Cerrar el dialog
+      setEntityEditDialog({ isOpen: false, entity: null });
+    } catch (error) {
+      console.error('❌ Error actualizando entidad:', error);
+    }
   };
 
   /**
@@ -238,10 +314,9 @@ function AppContent() {
   const handleElementSelect = (element, fromHierarchy = false) => {
     setSelectedElement(element);
 
-    // Si la selección viene de la jerarquía, cambiar a herramienta node
-    if (fromHierarchy && element) {
-      setCurrentTool('node');
-    }
+    // SIMPLIFICACIÓN: Ya no cambiamos automáticamente de herramienta
+    // El usuario puede mantener su herramienta preferida
+    // y la selección se mantiene consistente
 
     // Auto-expandir la ruta hacia el elemento seleccionado
     if (element && svgData) {
@@ -494,6 +569,10 @@ function AppContent() {
                 svgData={svgData}
                 initialTool={currentTool}
                 onToolChange={setCurrentTool}
+                onSVGUpdate={handleSVGUpdate}
+                onSaveHistory={(saveCallback) => {
+                  svgHistoryCallback.current = saveCallback;
+                }}
               />
             )
           ) : (
@@ -543,6 +622,10 @@ function AppContent() {
                 svgData={svgData}
                 initialTool={currentTool}
                 onToolChange={setCurrentTool}
+                onSVGUpdate={handleSVGUpdate}
+                onSaveHistory={(saveCallback) => {
+                  svgHistoryCallback.current = saveCallback;
+                }}
               />
             )
           )}

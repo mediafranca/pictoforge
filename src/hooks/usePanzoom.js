@@ -30,8 +30,17 @@ export function usePanzoom({ elementRef, panzoomOptions = {} } = {}) {
     }
 
     // Destruir instancia anterior si existe (para reinicializar con nuevas opciones)
+    let savedState = null;
     if (panzoomInstanceRef.current) {
       const panzoom = panzoomInstanceRef.current;
+
+      // Guardar el estado actual para restaurarlo
+      savedState = {
+        scale: panzoom.getScale(),
+        x: panzoom.getPan().x,
+        y: panzoom.getPan().y
+      };
+
       const parent = element.parentElement;
 
       if (parent) {
@@ -45,15 +54,15 @@ export function usePanzoom({ elementRef, panzoomOptions = {} } = {}) {
 
     // Configuración por defecto de panzoom
     const defaultOptions = {
-      maxScale: 10,
-      minScale: 0.1,
-      step: 0.1,
-      startScale: 1,
-      startX: 0,
-      startY: 0,
+      maxScale: 20,
+      minScale: 0.01,
+      step: 0.015,
+      // Usar estado guardado si existe, o valores por defecto
+      startScale: savedState ? savedState.scale : 1,
+      startX: savedState ? savedState.x : 0,
+      startY: savedState ? savedState.y : 0,
       cursor: 'grab',
-      canvas: true, // Permite pan fuera de los límites
-      contain: 'outside', // Permite pan sin restricciones
+      // NO usar contain ni canvas - eliminar restricciones completamente
       ...panzoomOptions,
     };
 
@@ -201,6 +210,27 @@ export function usePanzoom({ elementRef, panzoomOptions = {} } = {}) {
     }
   }, [elementRef]);
 
+  /**
+   * Habilita el pan (arrastre del canvas)
+   */
+  const enablePan = useCallback(() => {
+    if (panzoomInstanceRef.current) {
+      panzoomInstanceRef.current.setOptions({ disablePan: false });
+      console.log('✅ Pan habilitado');
+    }
+  }, []);
+
+  /**
+   * Deshabilita el pan (arrastre del canvas)
+   * El zoom con rueda sigue funcionando
+   */
+  const disablePan = useCallback(() => {
+    if (panzoomInstanceRef.current) {
+      panzoomInstanceRef.current.setOptions({ disablePan: true });
+      console.log('🚫 Pan deshabilitado');
+    }
+  }, []);
+
   return {
     // Estado
     panzoomState,
@@ -216,6 +246,8 @@ export function usePanzoom({ elementRef, panzoomOptions = {} } = {}) {
     center,
     getScale,
     getPan,
+    enablePan,
+    disablePan,
   };
 }
 
